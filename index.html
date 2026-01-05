@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SQL Transpiler</title>
+	<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+  padding: 1.5rem
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  color: #7f8cff
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  align-items: center
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: .5rem
+}
+
+label {
+  font-size: .875rem;
+  color: #aaa
+}
+
+select {
+  background: #2d2d44;
+  color: #eee;
+  border: 1px solid #444;
+  padding: .5rem;
+  border-radius: 4px;
+  font-size: .875rem
+}
+
+select:focus {
+  outline: none;
+  border-color: #7f8cff
+}
+
+.arrow {
+  color: #7f8cff;
+  font-size: 1.25rem
+}
+
+button {
+  background: #7f8cff;
+  color: #fff;
+  border: none;
+  padding: .5rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .875rem;
+  font-weight: 500;
+  transition: background .2s
+}
+
+button:hover:not(:disabled) {
+  background: #6670e6
+}
+
+button:disabled {
+  background: #444;
+  cursor: not-allowed
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem
+}
+
+@media(max-width:700px) {
+  .panels {
+    grid-template-columns: 1fr
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column
+}
+
+.panel-header {
+  font-size: .75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: .5rem
+}
+
+textarea {
+  width: 100%;
+  height: 300px;
+  background: #16162a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: .75rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: .875rem;
+  resize: vertical;
+  line-height: 1.5
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #7f8cff
+}
+
+textarea::placeholder {
+  color: #555
+}
+
+#output {
+  background: #1e1e38;
+  color: #a0e8a0
+}
+
+.message {
+  margin-top: 1rem;
+  padding: .75rem;
+  border-radius: 4px;
+  font-size: .875rem;
+  display: none
+}
+
+.message.error {
+  display: block;
+  background: #3d1f28;
+  border: 1px solid #8b3040;
+  color: #ff8a9b
+}
+
+.message.warning {
+  display: block;
+  background: #3d3520;
+  border: 1px solid #8b7030;
+  color: #ffd080
+}
+
+.message.info {
+  display: block;
+  background: #1f2d3d;
+  border: 1px solid #305080;
+  color: #80b0ff
+}
+
+.message pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: .5rem;
+  font-family: monospace
+}
+
+.footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: .75rem;
+  color: #555
+}
+
+.footer a {
+  color: #7f8cff
+}
+
+#status {
+  text-align: center;
+  padding: 2rem;
+  color: #7f8cff
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #444;
+  border-top-color: #7f8cff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: .5rem;
+  vertical-align: middle
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+.hidden {
+  display: none
+}
+	</style>
+</head>
+<body>
+	<div class="container">
+	  <h1>SQL Transpiler</h1>
+	  <div id="status">
+	    <span class="spinner"></span>
+	    Loading Python runtime...
+	  </div>
+	  <div id="app" class="hidden">
+	    <div class="controls">
+	      <div class="control-group">
+	        <label for="source">From:</label>
+	        <select id="source">
+	          <option value="bigquery">BigQuery</option>
+	          <option value="clickhouse">ClickHouse</option>
+	          <option value="databricks">Databricks</option>
+	          <option value="doris">Doris</option>
+	          <option value="drill">Drill</option>
+	          <option value="duckdb">DuckDB</option>
+	          <option value="hive">Hive</option>
+	          <option value="mysql">MySQL</option>
+	          <option value="oracle">Oracle</option>
+	          <option value="postgres">PostgreSQL</option>
+	          <option value="presto">Presto</option>
+	          <option value="redshift">Redshift</option>
+	          <option value="snowflake">Snowflake</option>
+	          <option value="spark">Spark</option>
+	          <option value="sqlite">SQLite</option>
+	          <option value="starrocks">StarRocks</option>
+	          <option value="teradata">Teradata</option>
+	          <option value="trino">Trino</option>
+	          <option value="tsql" selected>T-SQL (SQL Server)</option>
+	        </select>
+	      </div>
+	      <span class="arrow">→</span>
+	      <div class="control-group">
+	        <label for="target">To:</label>
+	        <select id="target">
+	          <option value="bigquery">BigQuery</option>
+	          <option value="clickhouse">ClickHouse</option>
+	          <option value="databricks" selected>Databricks</option>
+	          <option value="doris">Doris</option>
+	          <option value="drill">Drill</option>
+	          <option value="duckdb">DuckDB</option>
+	          <option value="hive">Hive</option>
+	          <option value="mysql">MySQL</option>
+	          <option value="oracle">Oracle</option>
+	          <option value="postgres" selected>PostgreSQL</option>
+	          <option value="presto">Presto</option>
+	          <option value="redshift">Redshift</option>
+	          <option value="snowflake">Snowflake</option>
+	          <option value="spark">Spark</option>
+	          <option value="sqlite">SQLite</option>
+	          <option value="starrocks">StarRocks</option>
+	          <option value="teradata">Teradata</option>
+	          <option value="trino">Trino</option>
+	          <option value="tsql">T-SQL (SQL Server)</option>
+	        </select>
+	      </div>
+	      <button id="transpile">Transpile</button>
+	      <span id="loading" class="hidden">
+	      <span class="spinner">
+	      </span></span>
+	    </div>
+	    <div class="panels">
+	      <div class="panel">
+	        <div class="panel-header">Input SQL</div>
+	        <textarea id="input" placeholder="Enter your SQL query here..." spellcheck="false"></textarea>
+	      </div>
+	      <div class="panel">
+	        <div class="panel-header">Output SQL</div>
+	        <textarea id="output" readonly placeholder="Transpiled SQL will appear here..." spellcheck="false"></textarea>
+	      </div>
+	    </div>
+	    <div class="message" id="message"></div>
+	  </div>
+	  <div class="footer">
+	    Powered by <a href="https://github.com/tobymao/sqlglot" target="_blank">sqlglot</a> + <a href="https://pyodide.org" target="_blank">Pyodide</a>
+	  </div>
+	</div>
+	<script src="https://cdn.jsdelivr.net/pyodide/v0.29.0/full/pyodide.js"></script>
+	<script>
+const $ = id => document.getElementById(id);
+let pyodide;
+	
+async function init() {
+	try {
+		pyodide = await loadPyodide();
+		$('status').innerHTML = `<span class="spinner"></span>Installing sqlglot…`;
+		await pyodide.loadPackage('micropip');
+		await pyodide.runPythonAsync(String.raw`
+import micropip
+await micropip.install('sqlglot')
+import sqlglot
+from sqlglot.errors import ParseError, UnsupportedError, TokenError
+import json
+
+def transpile(sql, source, target):
+    warnings = []
+    try:
+        source = source if source else None
+        statements = sqlglot.parse(sql, read=source)
+        if not statements or all(s is None for s in statements):
+            return json.dumps({"error": "Could not parse SQL", "details": "The input doesn’t appear to be valid SQL."})
+        results = []
+        for stmt in statements:
+            if stmt is None:
+                continue
+            try:
+                results.append(stmt.sql(dialect=target, pretty=True))
+            except UnsupportedError as e:
+                warnings.append(f"Unsupported feature: {e}")
+                results.append(stmt.sql(dialect=target, pretty=True, unsupported_level=sqlglot.ErrorLevel.WARN))
+        output = ";\n\n".join(results)
+        if results and sql.rstrip().endswith(";"):
+            output += ";"
+        return json.dumps({"sql": output, "warnings": warnings if warnings else None})
+    except ParseError as e:
+        return json.dumps({"error": "Parse error", "details": str(e)})
+    except TokenError as e:
+        return json.dumps({"error": "Tokenization error", "details": str(e)})
+    except UnsupportedError as e:
+        return json.dumps({"error": "Unsupported SQL feature", "details": str(e)})
+    except Exception as e:
+        return json.dumps({"error": "Transpilation failed", "details": str(e)})
+		`);
+		$('status').classList.add('hidden');
+		$('app').classList.remove('hidden'); 
+	} catch (e) { 
+		$('status').innerHTML = `<span style="color:#ff8a9b">Failed to load: ${e.message}</span>`;
+	}
+}
+
+async function transpile() {
+	const sql = $('input').value.trim();
+	if (!sql) { showMsg('info', 'Please enter a SQL query.'); return; }
+	$('transpile').disabled = true;
+	$('loading').classList.remove('hidden');
+	$('message').className = 'message';
+	$('output').value = '';
+	try {
+		const result = pyodide.runPython(`transpile(${JSON.stringify(sql)}, ${JSON.stringify($('source').value)}, ${JSON.stringify($('target').value)})`);
+		const data = JSON.parse(result);
+		if (data.error) {
+			showMsg('error', data.error, data.details);
+		} else {
+			$('output').value = data.sql;
+			if (data.warnings?.length) showMsg('warning', 'Warnings:', data.warnings.join('\n'));
+		}
+	} catch (e) {
+		showMsg('error', 'Execution failed: ' + e.message);
+	}
+	$('transpile').disabled = false;
+	$('loading').classList.add('hidden');
+}
+
+function showMsg(type, text, details) {
+	const msg = $('message');
+	msg.className = 'message ' + type;
+	msg.innerHTML = text + (details ? '<pre>' + escHtml(details) + '</pre>' : '');
+}
+
+function escHtml(s) { return s.replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>'); }
+
+$('transpile').onclick = transpile;
+$('input').onkeydown = e => { if (e.ctrlKey && e.key === 'Enter') transpile(); };
+
+init();
+</script>
+
+</body>
+</html>
