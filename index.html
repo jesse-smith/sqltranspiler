@@ -344,16 +344,27 @@ def transform_like_operators(stmt, source_dialect, target_dialect):
 
         stmt = stmt.transform(replace_like_with_ilike)
 
-    # Databricks/Spark -> T-SQL: Warn about ILIKE conversion
+    # Databricks/Spark -> T-SQL: Convert ILIKE to LIKE and warn about LIKE case sensitivity loss
     elif source_dialect in ('databricks', 'spark') and target_dialect == 'tsql':
-        has_ilike = False
-        for node in stmt.walk():
-            if isinstance(node, exp.ILike):
-                has_ilike = True
-                break
+        has_like = False
 
-        if has_ilike:
-            warnings.append("ILIKE operator converted to LIKE. Note: T-SQL LIKE is case-insensitive by default, matching ILIKE behavior.")
+        def replace_ilike_with_like(node):
+            nonlocal has_like
+            if isinstance(node, exp.ILike):
+                # Convert ILIKE to LIKE (both are case-insensitive, no warning needed)
+                return exp.Like(
+                    this=node.this,
+                    expression=node.expression
+                )
+            elif isinstance(node, exp.Like):
+                # Track LIKE usage for warning
+                has_like = True
+            return node
+
+        stmt = stmt.transform(replace_ilike_with_like)
+
+        if has_like:
+            warnings.append("LIKE operator is case-sensitive in Databricks/Spark but case-insensitive in T-SQL (under default collation). Case sensitivity will be lost.")
 
     return stmt, warnings
 
