@@ -313,8 +313,49 @@ async function init() {
 import micropip
 await micropip.install('sqlglot')
 import sqlglot
+from sqlglot import exp
 from sqlglot.errors import ParseError, UnsupportedError, TokenError
 import json
+
+# NOTE: As more dialect-specific transformations are added, consider building an
+# intermediate representation (IR) layer here that normalizes all dialect quirks
+# before final transpilation. This would allow composing multiple transformations
+# in a cleaner, more maintainable way.
+
+def transform_like_operators(stmt, source_dialect, target_dialect):
+    """
+    Handle LIKE operator case sensitivity differences between dialects.
+
+    T-SQL: LIKE is case-insensitive by default
+    Databricks/Spark: LIKE is case-sensitive, ILIKE is case-insensitive
+    """
+    warnings = []
+
+    # T-SQL -> Databricks/Spark: Convert LIKE to ILIKE
+    if source_dialect == 'tsql' and target_dialect in ('databricks', 'spark'):
+        def replace_like_with_ilike(node):
+            if isinstance(node, exp.Like):
+                # Create a new ILike node with the same arguments
+                return exp.ILike(
+                    this=node.this,
+                    expression=node.expression
+                )
+            return node
+
+        stmt = stmt.transform(replace_like_with_ilike)
+
+    # Databricks/Spark -> T-SQL: Warn about ILIKE conversion
+    elif source_dialect in ('databricks', 'spark') and target_dialect == 'tsql':
+        has_ilike = False
+        for node in stmt.walk():
+            if isinstance(node, exp.ILike):
+                has_ilike = True
+                break
+
+        if has_ilike:
+            warnings.append("ILIKE operator converted to LIKE. Note: T-SQL LIKE is case-insensitive by default, matching ILIKE behavior.")
+
+    return stmt, warnings
 
 def transpile(sql, source, target):
     warnings = []
@@ -322,11 +363,16 @@ def transpile(sql, source, target):
         source = source if source else None
         statements = sqlglot.parse(sql, read=source)
         if not statements or all(s is None for s in statements):
-            return json.dumps({"error": "Could not parse SQL", "details": "The input doesn’t appear to be valid SQL."})
+            return json.dumps({"error": "Could not parse SQL", "details": "The input doesn't appear to be valid SQL."})
         results = []
         for stmt in statements:
             if stmt is None:
                 continue
+
+            # Apply dialect-specific transformations
+            stmt, transform_warnings = transform_like_operators(stmt, source, target)
+            warnings.extend(transform_warnings)
+
             try:
                 results.append(stmt.sql(dialect=target, pretty=True))
             except UnsupportedError as e:
